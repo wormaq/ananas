@@ -13,6 +13,8 @@ from .models import Vendor, Customer
 from .permissions import AnonPermissionOnly
 from .serializers import MyTokenObtainPairSerializer, VendorRegisterSerializer, CustomerRegisterSerializer, \
     VendorProfileSerializer
+import redis
+from django.core.cache import cache
 
 
 def decode_auth_token(token):
@@ -49,9 +51,24 @@ class VendorRegisterView(APIView):
                 is_Vendor=True
             )
             vendor.set_password(request.data['password'])
-            vendor.save()
+            cache.set(f"vendor{vendor.name}", vendor)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class RedisView(APIView):
+
+    def get_object(self, id):
+        try:
+            return Vendor.objects.get(id=id)
+        except Vendor.DoesNotExist:
+            raise Http404
+
+    def get(self, id):
+        with redis.Redis as redis_client:
+            vendor = self.get_object(id)
+            redis_client.set("user", vendor)
+            return Response(status.HTTP_200_OK)
 
 
 class CustomerRegisterView(APIView):
